@@ -86,9 +86,16 @@ public final class ExecutorServiceHelpers {
      * @return A new executor service.
      */
     public static ScheduledExecutorService newScheduledThreadPool(int size, String poolName) {
-        // Caller runs only occurs after shutdown, as queue size is unbounded.
-        ScheduledThreadPoolExecutor result = new ScheduledThreadPoolExecutor(size, getThreadFactory(poolName), new CallerRuns(poolName));
+        String test = System.getenv("TEST");
+        ScheduledThreadPoolExecutor result;
+        if (test == "ORDER") {
+            result = new ScheduledThreadPoolExecutorForTesting(size, getThreadFactory(poolName), new CallerRuns(poolName));
+        } else {
+            // Caller runs only occurs after shutdown, as queue size is unbounded.
+            result = new ScheduledThreadPoolExecutor(size, getThreadFactory(poolName), new CallerRuns(poolName));
+        }
 
+        // ScheduledThreadPoolExecutor result = new ScheduledThreadPoolExecutor(size, getThreadFactory(poolName), new CallerRuns(poolName));
         // Do not execute any periodic tasks after shutdown.
         result.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
 
@@ -98,6 +105,7 @@ public final class ExecutorServiceHelpers {
         // Remove tasks from the executor once they are done executing. By default, even when canceled, these tasks are
         // not removed; if this setting is not enabled we could end up with leaked (and obsolete) tasks.
         result.setRemoveOnCancelPolicy(true);
+
         return result;
     }
     
