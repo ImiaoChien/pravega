@@ -33,7 +33,7 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
             Map<String, String> env = System.getenv();
             Field field = env.getClass().getDeclaredField("m");
             field.setAccessible(true);
-            ((Map<String, String>) field.get(env)).put("TEST", "ORDER");
+            ((Map<String, String>) field.get(env)).put("TEST", "1");
             ses = ExecutorServiceHelpers.newScheduledThreadPool(1, "pool");
         } catch (Exception e) {
             System.out.println("Error");
@@ -59,7 +59,7 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
             Runnable task2 = () -> System.out.print("task2 ");
             System.out.print("task1 ");
             ses.schedule(task2, 1, TimeUnit.MICROSECONDS);
-            this.wait(10);
+            this.wait(100);
             ses.shutdown();
             String rs = outContent.toString();
             System.setOut(originalOut);
@@ -92,7 +92,7 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
             e.printStackTrace();
         }
         ses.shutdown();
-        assertEquals("task1 task2 task3 ", outContent.toString());
+        assertEquals("task2 task3 task1 ", outContent.toString());
         String rs = outContent.toString();
         System.setOut(originalOut);
     }
@@ -125,7 +125,7 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
         } catch (TimeoutException e) {
             e.printStackTrace();
         }
-        assertEquals("task1 task3 task2 task4 ", outContent.toString());
+        assertEquals("task1 task4 task3 task2 ", outContent.toString());
         ses.shutdown();
         System.setOut(originalOut);
     }
@@ -183,8 +183,8 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
             e.printStackTrace();
         }
 
-        assertEquals("task1 task3 task3_1 task4 task4_1 task2 task4_2 task4_3 " +
-                "task2_2 task2_1 task2_3 task3_2 task3_3 ", outContent.toString());
+        assertEquals("task1 task4 task2 task2_2 task2_1 task4_1 task4_3" +
+                " task3 task4_2 task2_3 task3_2 task3_3 task3_1 ", outContent.toString());
         System.setOut(originalOut);
     }
 

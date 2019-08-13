@@ -88,8 +88,13 @@ public final class ExecutorServiceHelpers {
     public static ScheduledExecutorService newScheduledThreadPool(int size, String poolName) {
         String test = System.getenv("TEST");
         ScheduledThreadPoolExecutor result;
-        if (test == "ORDER") {
-            result = new ScheduledThreadPoolExecutorForTesting(size, getThreadFactory(poolName), new CallerRuns(poolName));
+        if (test != null) {
+            if (test.matches("-?\\d+(\\.\\d+)?")) {
+                result = new ScheduledThreadPoolExecutorForTesting(size, Long.parseLong(test),
+                                                                getThreadFactory(poolName), new CallerRuns(poolName));
+            } else {
+                throw new IllegalStateException("Usage: TEST number  ex: TEST 0");
+            }
         } else {
             // Caller runs only occurs after shutdown, as queue size is unbounded.
             result = new ScheduledThreadPoolExecutor(size, getThreadFactory(poolName), new CallerRuns(poolName));
