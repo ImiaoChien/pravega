@@ -5,6 +5,8 @@ import java.util.concurrent.*;
 
 public class ScheduledThreadPoolExecutorForTesting extends ScheduledThreadPoolExecutor {
     private static List<Runnable> tasks;
+    private List<Runnable> halts = new ArrayList<>();
+    private long seed;
 
     /**
      * Creates a new {@code ScheduledThreadPoolExecutorForTesting} with the
@@ -14,9 +16,10 @@ public class ScheduledThreadPoolExecutorForTesting extends ScheduledThreadPoolEx
      *                     if they are idle, unless {@code allowCoreThreadTimeOut} is set
      * @throws IllegalArgumentException if {@code corePoolSize < 0}
      */
-    public ScheduledThreadPoolExecutorForTesting(int corePoolSize) {
-        super(1);
+    public ScheduledThreadPoolExecutorForTesting(int corePoolSize, long seed) {
+        super(corePoolSize);
         tasks = new LinkedList<>();
+        this.seed = seed;
     }
 
     /**
@@ -30,10 +33,11 @@ public class ScheduledThreadPoolExecutorForTesting extends ScheduledThreadPoolEx
      * @throws IllegalArgumentException if {@code corePoolSize < 0}
      * @throws NullPointerException     if {@code threadFactory} is null
      */
-    public ScheduledThreadPoolExecutorForTesting(int corePoolSize,
+    public ScheduledThreadPoolExecutorForTesting(int corePoolSize, long seed,
                                                  ThreadFactory threadFactory) {
-        super(1, threadFactory);
+        super(corePoolSize, threadFactory);
         tasks = new LinkedList<>();
+        this.seed = seed;
     }
 
     /**
@@ -47,10 +51,11 @@ public class ScheduledThreadPoolExecutorForTesting extends ScheduledThreadPoolEx
      * @throws IllegalArgumentException if {@code corePoolSize < 0}
      * @throws NullPointerException     if {@code handler} is null
      */
-    public ScheduledThreadPoolExecutorForTesting(int corePoolSize,
+    public ScheduledThreadPoolExecutorForTesting(int corePoolSize, long seed,
                                                  RejectedExecutionHandler handler) {
-        super(1, handler);
+        super(corePoolSize, handler);
         tasks = new LinkedList<>();
+        this.seed = seed;
     }
 
     /**
@@ -67,11 +72,12 @@ public class ScheduledThreadPoolExecutorForTesting extends ScheduledThreadPoolEx
      * @throws NullPointerException     if {@code threadFactory} or
      *                                  {@code handler} is null
      */
-    public ScheduledThreadPoolExecutorForTesting(int corePoolSize,
+    public ScheduledThreadPoolExecutorForTesting(int corePoolSize, long seed,
                                                  ThreadFactory threadFactory,
                                                  RejectedExecutionHandler handler) {
-        super(1, threadFactory, handler);
+        super(corePoolSize, threadFactory, handler);
         tasks = new LinkedList<>();
+        this.seed = seed;
     }
 
     /**
@@ -90,18 +96,19 @@ public class ScheduledThreadPoolExecutorForTesting extends ScheduledThreadPoolEx
     protected void afterExecute(Runnable r, Throwable t) {
         synchronized (this) {
             super.afterExecute(r, t);
+            // if that unlocks a halting thread
+            // unhalt the halting thread and add no task to the queue
             randomTask();
         }
     }
-/*
+
     public ScheduledFuture<?> schedule(Runnable var1, long var2, TimeUnit var4) {
-        ScheduledFuture<?> current = super.schedule(var1, var2, var4);
-        randomTask();
-        try {
-            workers.get(workers.size() - 1).wait();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+        if (getActiveCount() - halts.size() == 1) {
+            // halt the current running thread
         }
+        ScheduledFuture<?> current = super.schedule(var1, var2, var4);
+
+        randomTask();
         return current;
     }
 
@@ -122,11 +129,12 @@ public class ScheduledThreadPoolExecutorForTesting extends ScheduledThreadPoolEx
         randomTask();
         return current;
     }
-*/
+
+
     private void randomTask() {
         BlockingQueue<Runnable> queue = getQueue();
         queue.drainTo(tasks);
-        Random ran = new Random(tasks.size());
+        Random ran = new Random(seed);
         for (int i = 0; i < tasks.size(); i++) {
             int n = ran.nextInt(tasks.size());
             Runnable temp = tasks.get(n);
