@@ -45,26 +45,17 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
      */
     @Test(timeout = 5000)
     public void testBasicOneTask() throws InterruptedException {
-        String firstTest = testBasicOneTaskHelper();
-        String secondTest = testBasicOneTaskHelper();
-        assertEquals(firstTest, secondTest);
-    }
+        final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
+        final PrintStream originalOut = System.out;
+        System.setOut(new PrintStream(outContent));
 
-    private String testBasicOneTaskHelper() throws InterruptedException {
-        synchronized (this) {
-            final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-            final PrintStream originalOut = System.out;
-            System.setOut(new PrintStream(outContent));
-
-            Runnable task2 = () -> System.out.print("task2 ");
-            System.out.print("task1 ");
-            ses.schedule(task2, 1, TimeUnit.MICROSECONDS);
-            this.wait(10);
-            ses.shutdown();
-            String rs = outContent.toString();
-            System.setOut(originalOut);
-            return rs;
-        }
+        Runnable task2 = () -> System.out.print("task2 ");
+        System.out.print("task1 ");
+        ses.schedule(task2, 1, TimeUnit.MICROSECONDS);
+        waitWithReusableLatch();
+        ses.shutdown();
+        assertEquals(outContent.toString(), "task1 task2 ");
+        System.setOut(originalOut);
     }
 
     /**
@@ -83,14 +74,7 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
         ses.schedule(task2, 1, TimeUnit.MICROSECONDS);
         ses.schedule(task3, 1, TimeUnit.MICROSECONDS);
 
-        ReusableLatch lock = new ReusableLatch();
-        try {
-            lock.await(10);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (TimeoutException e) {
-            e.printStackTrace();
-        }
+        waitWithReusableLatch();
         ses.shutdown();
         assertEquals("task1 task2 task3 ", outContent.toString());
         String rs = outContent.toString();
@@ -117,14 +101,7 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
         };
 
         ses.schedule(task1, 1, TimeUnit.NANOSECONDS);
-        ReusableLatch lock = new ReusableLatch();
-        try {
-            lock.await(1000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (TimeoutException e) {
-            e.printStackTrace();
-        }
+        waitWithReusableLatch();
         assertEquals("task1 task3 task2 task4 ", outContent.toString());
         ses.shutdown();
         System.setOut(originalOut);
@@ -174,14 +151,7 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
         };
 
         ses.schedule(task1, 1, TimeUnit.NANOSECONDS);
-        ReusableLatch lock = new ReusableLatch();
-        try {
-            lock.await(100);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (TimeoutException e) {
-            e.printStackTrace();
-        }
+        waitWithReusableLatch();
 
         assertEquals("task1 task3 task3_1 task4 task4_1 task2 task4_2 task4_3 " +
                 "task2_2 task2_1 task2_3 task3_2 task3_3 ", outContent.toString());
@@ -267,19 +237,23 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
             };
 
             ses.schedule(task1, 1, TimeUnit.NANOSECONDS);
-            ReusableLatch lock = new ReusableLatch();
-            try {
-                lock.await(100);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            } catch (TimeoutException e) {
-                e.printStackTrace();
-            }
+            waitWithReusableLatch();
 
             assertEquals("", outContent.toString());
             System.setOut(originalOut);
         } catch (Exception e) {
             System.out.println("EXCEPTION");
+        }
+    }
+
+    public void waitWithReusableLatch() {
+        ReusableLatch lock = new ReusableLatch();
+        try {
+            lock.await(100);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (TimeoutException e) {
+            e.printStackTrace();
         }
     }
 }
