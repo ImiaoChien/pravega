@@ -16,9 +16,7 @@ import org.junit.rules.TemporaryFolder;
 import static org.junit.Assert.assertEquals;
 
 /**
- * Unit tests for the ExecutorServiceHelpers class.
- * NOTE: this class inherits from ThreadPooledTestSuite but does not set a custom ThreadPoolSize. The Default (0) indicates
- * we are using an InlineThreadPool, which is what all these tests rely on.
+ * Unit tests for the ScheduledThreadPoolExecutorForTestingTests class.
  */
 public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTestSuite {
     ScheduledExecutorService ses;
@@ -43,7 +41,7 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
      * Tests when calling one task method.
      */
     @Test
-    public void testBasicOneTask() throws InterruptedException {
+    public void testBasicOneTask() {
         final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         final PrintStream originalOut = System.out;
         System.setOut(new PrintStream(outContent));
@@ -62,7 +60,7 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
      * Tests when calling multiple tasks.
      */
     @Test
-    public void testBasicMultipleTask() throws InterruptedException {
+    public void testBasicMultipleTask() {
         final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         final PrintStream originalOut = System.out;
         System.setOut(new PrintStream(outContent));
@@ -85,7 +83,7 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
      * Tests the execute() method.
      */
     @Test
-    public void testTaskCallTask() throws IllegalMonitorStateException, InterruptedException {
+    public void testTaskCallTask() throws IllegalMonitorStateException {
 
         final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         final PrintStream originalOut = System.out;
@@ -113,7 +111,7 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
      * Tests the execute() method.
      */
     @Test
-    public void testTaskCallTaskSchedule() throws IllegalMonitorStateException, InterruptedException {
+    public void testTaskCallTaskSchedule() throws IllegalMonitorStateException {
 
         final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         final PrintStream originalOut = System.out;
@@ -195,7 +193,7 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
     /**
      * Tests when calling one task method.
      */
-    @Test //(timeout = 5000)
+    @Test
     public void testDependantTasks() {
         try {
 
@@ -284,7 +282,7 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
     }
 
     @Test
-    public void delayShutdown() throws InterruptedException {
+    public void delayShutdown() {
         final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         final PrintStream originalOut = System.out;
         System.setOut(new PrintStream(outContent));
