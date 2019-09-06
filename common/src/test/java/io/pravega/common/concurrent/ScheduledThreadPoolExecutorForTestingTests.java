@@ -3,7 +3,6 @@
  */
 package io.pravega.common.concurrent;
 
-import io.pravega.common.util.ReusableLatch;
 import io.pravega.test.common.*;
 
 import java.io.*;
@@ -33,8 +32,8 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
             Map<String, String> env = System.getenv();
             Field field = env.getClass().getDeclaredField("m");
             field.setAccessible(true);
-            ((Map<String, String>) field.get(env)).put("TEST", "0");
-            ses = ExecutorServiceHelpers.newScheduledThreadPool(1, "pool");
+            ((Map<String, String>) field.get(env)).put("DETERMINISTIC_TEST", "10");
+            ses = ExecutorServiceHelpers.newScheduledThreadPool(10, "pool");
         } catch (Exception e) {
             System.out.println("Error");
         }
@@ -43,7 +42,7 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
     /**
      * Tests when calling one task method.
      */
-    @Test(timeout = 5000)
+    @Test
     public void testBasicOneTask() throws InterruptedException {
         final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         final PrintStream originalOut = System.out;
@@ -51,8 +50,9 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
 
         Runnable task2 = () -> System.out.print("task2 ");
         System.out.print("task1 ");
-        ses.schedule(task2, 1, TimeUnit.MICROSECONDS);
-        waitWithReusableLatch();
+
+        ses.schedule(task2, 1, TimeUnit.NANOSECONDS);
+
         ses.shutdown();
         assertEquals(outContent.toString(), "task1 task2 ");
         System.setOut(originalOut);
@@ -70,11 +70,11 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
         Runnable task1 = () -> System.out.print("task1 ");
         Runnable task2 = () -> System.out.print("task2 ");
         Runnable task3 = () -> System.out.print("task3 ");
-        ses.schedule(task1, 1, TimeUnit.MICROSECONDS);
-        ses.schedule(task2, 1, TimeUnit.MICROSECONDS);
-        ses.schedule(task3, 1, TimeUnit.MICROSECONDS);
 
-        waitWithReusableLatch();
+        ses.schedule(task1, 1, TimeUnit.NANOSECONDS);
+        ses.schedule(task2, 1, TimeUnit.NANOSECONDS);
+        ses.schedule(task3, 1, TimeUnit.NANOSECONDS);
+
         ses.shutdown();
         assertEquals("task1 task2 task3 ", outContent.toString());
         String rs = outContent.toString();
@@ -84,8 +84,37 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
     /**
      * Tests the execute() method.
      */
-    @Test(timeout = 50000)
-    public void testTaskCallTask() throws IllegalMonitorStateException {
+    @Test
+    public void testTaskCallTask() throws IllegalMonitorStateException, InterruptedException {
+
+        final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
+        final PrintStream originalOut = System.out;
+        System.setOut(new PrintStream(outContent));
+
+        Runnable task1 = ()  -> {
+            System.out.print("task1 ");
+            Runnable task2 = () -> System.out.print("task2 ");
+            ses.execute(task2);
+            Runnable task3 = () -> System.out.print("task3 ");
+            ses.execute(task3);
+            Runnable task4 = () -> System.out.print("task4 ");
+            ses.execute(task4);
+        };
+
+        ses.schedule(task1, 1, TimeUnit.NANOSECONDS);
+        ses.shutdown();
+        assertEquals("task1 task4 task2 task3 ", outContent.toString());
+
+        System.setOut(originalOut);
+    }
+
+
+    /**
+     * Tests the execute() method.
+     */
+    @Test
+    public void testTaskCallTaskSchedule() throws IllegalMonitorStateException, InterruptedException {
+
         final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         final PrintStream originalOut = System.out;
         System.setOut(new PrintStream(outContent));
@@ -101,16 +130,18 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
         };
 
         ses.schedule(task1, 1, TimeUnit.NANOSECONDS);
-        waitWithReusableLatch();
-        assertEquals("task1 task4 task3 task2 ", outContent.toString());
         ses.shutdown();
+        assertEquals("task1 task4 task2 task3 ", outContent.toString());
+
         System.setOut(originalOut);
     }
+
+
 
     /**
      * Tests when calling one task method.
      */
-    @Test(timeout = 5000)
+    @Test
     public void testCallTestsNested() {
         final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         final PrintStream originalOut = System.out;
@@ -126,6 +157,8 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
                 ses.schedule(task2_2, 1, TimeUnit.NANOSECONDS);
                 Runnable task2_3 = () -> System.out.print("task2_3 ");
                 ses.schedule(task2_3, 1, TimeUnit.NANOSECONDS);
+                Runnable task2_4 = () -> System.out.print("task2_4 ");
+                ses.schedule(task2_4, 1, TimeUnit.NANOSECONDS);
             };
             ses.schedule(task2, 1, TimeUnit.NANOSECONDS);
             Runnable task3 = () -> {
@@ -148,112 +181,120 @@ public class ScheduledThreadPoolExecutorForTestingTests  extends ThreadPooledTes
                 ses.schedule(task4_3, 1, TimeUnit.NANOSECONDS);
             };
             ses.schedule(task4, 1, TimeUnit.NANOSECONDS);
+
         };
 
         ses.schedule(task1, 1, TimeUnit.NANOSECONDS);
-        waitWithReusableLatch();
+        ses.shutdown();
 
-        assertEquals("task1 task4 task4_3 task4_2 task4_1 task3 task3_3 task3_2 task3_1 " +
-                "task2 task2_3 task2_2 task2_1 ", outContent.toString());
+        assertEquals("task1 task4 task4_1 task4_2 task4_3 task2 task2_2 task2_3 task2_4 " +
+                "task3 task3_2 task3_3 task2_1 task3_1 ", outContent.toString());
         System.setOut(originalOut);
     }
 
     /**
      * Tests when calling one task method.
      */
-    // TODO
-    @Test(timeout = 5000)
-    public void testThrowExceptions() {
-        try {
-            final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-            final ByteArrayOutputStream errContent = new ByteArrayOutputStream();
-            final PrintStream originalOut = System.out;
-            final PrintStream originalErr = System.err;
-            System.setOut(new PrintStream(outContent));
-            System.setErr(new PrintStream(errContent));
-
-
-
-            assertEquals("task1 task3 task2 ", outContent.toString());
-            System.setOut(originalOut);
-            System.setErr(originalErr);
-        } catch (Exception e) {
-            System.out.println("EXCEPTION");
-        }
-    }
-
-    /**
-     * Tests when calling one task method.
-     */
-    // TODO
-    @Test(timeout = 5000)
-    public void testTimeOutTasks() {
-        try {
-            final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-            final ByteArrayOutputStream errContent = new ByteArrayOutputStream();
-            final PrintStream originalOut = System.out;
-            final PrintStream originalErr = System.err;
-            System.setOut(new PrintStream(outContent));
-            System.setErr(new PrintStream(errContent));
-
-            assertEquals("task1 task3 task2 ", outContent.toString());
-            System.setOut(originalOut);
-            System.setErr(originalErr);
-        } catch (Exception e) {
-            System.out.println("EXCEPTION");
-        }
-    }
-
-    /**
-     * Tests when calling one task method.
-     */
-    // TODO
     @Test //(timeout = 5000)
     public void testDependantTasks() {
         try {
+
             final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
             final PrintStream originalOut = System.out;
             System.setOut(new PrintStream(outContent));
 
             Runnable task1 = () -> {
-                System.out.println("task1 ");
-                Future<String> task2 = ses.submit(() -> {
-                    System.out.println("task2_1 ");
-                    return "task3 ";
-                });
+                System.out.print("task1 ");
+                Runnable task2 = () -> {
+                    System.out.print("task2 ");
+                    Runnable task2_1 = () -> System.out.print("task2_1 ");
+                    ses.schedule(task2_1, 1, TimeUnit.NANOSECONDS);
+                    Runnable task2_2 = () -> System.out.print("task2_2 ");
+                    ses.schedule(task2_2, 1, TimeUnit.NANOSECONDS);
+                    Runnable task2_3 = () -> System.out.print("task2_3 ");
+                    ses.schedule(task2_3, 1, TimeUnit.NANOSECONDS);
+                };
                 Future<String> task3 = ses.submit(() -> {
-                    System.out.println("task3_1 ");
+                    System.out.print("task3_1 ");
                     return "task3 ";
                 });
+                Runnable task4 = () -> {
+                    System.out.print("task4 ");
+                    Runnable task4_1 = () -> System.out.print("task4_1 ");
+                    ses.schedule(task4_1, 1, TimeUnit.NANOSECONDS);
+                    Runnable task4_2 = () -> System.out.print("task4_2 ");
+                    ses.schedule(task4_2, 1, TimeUnit.NANOSECONDS);
+                    Runnable task4_3 = () -> System.out.print("task4_3 ");
+                    ses.schedule(task4_3, 1, TimeUnit.NANOSECONDS);
+                };
 
                 try {
-                    System.out.println(task3.get());
-                    System.out.println(task2.get());
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                } catch (ExecutionException e) {
+                    ses.submit(task2);
+                    System.out.print(task3.get());
+                    ses.submit(task4);
+                } catch (InterruptedException | ExecutionException e) {
                     e.printStackTrace();
                 }
             };
 
             ses.schedule(task1, 1, TimeUnit.NANOSECONDS);
-            waitWithReusableLatch();
+            ses.shutdown();
 
-            assertEquals("", outContent.toString());
+            assertEquals("task1 task3_1 task3 task2 task2_2 task2_3 task4 task4_2 task4_3 task2_1 task4_1 ",
+                    outContent.toString());
             System.setOut(originalOut);
         } catch (Exception e) {
             System.out.println("EXCEPTION");
         }
     }
 
-    public void waitWithReusableLatch() {
-        ReusableLatch lock = new ReusableLatch();
+    /**
+     * Tests when calling one task method.
+     */
+    @Test
+    public void testDependantTasksBasic() {
         try {
-            lock.await(100);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (TimeoutException e) {
-            e.printStackTrace();
+
+            final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
+            final PrintStream originalOut = System.out;
+            System.setOut(new PrintStream(outContent));
+
+            Runnable task1 = () -> {
+                System.out.print("task1 ");
+                Future<String> task3 = ses.submit(() -> {
+                    System.out.print("task3_1 ");
+                    return "task3 ";
+                });
+
+                try {
+                    String rs = task3.get();
+                    System.out.print(rs);
+                } catch (InterruptedException | ExecutionException e) {
+                    e.printStackTrace();
+                }
+            };
+
+            ses.schedule(task1, 1, TimeUnit.NANOSECONDS);
+            ses.shutdown();
+            assertEquals("task1 task3_1 task3 ", outContent.toString());
+            System.setOut(originalOut);
+        } catch (Exception e) {
+            System.out.println("EXCEPTION");
         }
+    }
+
+    @Test
+    public void delayShutdown() throws InterruptedException {
+        final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
+        final PrintStream originalOut = System.out;
+        System.setOut(new PrintStream(outContent));
+
+        Runnable task2 = () -> System.out.print("task2 ");
+        System.out.print("task1 ");
+        ses.schedule(task2, 1, TimeUnit.NANOSECONDS);
+
+        ses.shutdown();
+        assertEquals(outContent.toString(), "task1 task2 ");
+        System.setOut(originalOut);
     }
 }
