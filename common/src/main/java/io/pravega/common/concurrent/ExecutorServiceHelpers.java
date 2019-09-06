@@ -86,14 +86,15 @@ public final class ExecutorServiceHelpers {
      * @return A new executor service.
      */
     public static ScheduledExecutorService newScheduledThreadPool(int size, String poolName) {
-        String test = System.getenv("TEST");
+        String test = System.getenv("DETERMINISTIC_TEST");
         ScheduledThreadPoolExecutor result;
-        if (test != null) {
-            if (test.matches("-?\\d+(\\.\\d+)?")) {
+        if (test != null && test != "") {
+            if (isInteger(test)) {
                 result = new ScheduledThreadPoolExecutorForTesting(size, Long.parseLong(test),
                                                                 getThreadFactory(poolName), new CallerRuns(poolName));
             } else {
-                throw new IllegalStateException("Usage: TEST number  ex: TEST 0");
+                throw new IllegalStateException("Usage: DETERMINISTIC_TEST integer  ex: DETERMINISTIC_TEST 0  " +
+                        "(To not use deterministic scheduling, set DETERMINISTIC_TEST to empty string or null.)");
             }
         } else {
             // Caller runs only occurs after shutdown, as queue size is unbounded.
@@ -112,6 +113,14 @@ public final class ExecutorServiceHelpers {
         result.setRemoveOnCancelPolicy(true);
 
         return result;
+    }
+
+    public static boolean isInteger(String s) {
+        try {
+            Integer.parseInt(s);
+            return true;
+        } catch (NumberFormatException ex) { }
+        return false;
     }
     
     /**
