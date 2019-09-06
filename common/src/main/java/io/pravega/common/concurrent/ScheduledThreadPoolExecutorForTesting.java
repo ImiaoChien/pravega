@@ -1,16 +1,29 @@
 package io.pravega.common.concurrent;
 
 import io.pravega.common.util.ReusableLatch;
-
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * A test executor that provides deterministic scheduling
+ *
+ * Usage:
+ * set environment variable $DETERMINISTIC_TEST to an integer
+ * By providing an identical number, the tasks would be executed in the same order
+ * To run tests in a different order, use a different integer.
+ * To use the normal executor, let DETERMINISTIC_TEST be null or an empty string
+ *
+ * How it works:
+ * When given a set of task A, B, C, we can have orders ABC, BCA, CAB, ACB, BAC, CBA
+ * in the case of CBA, if task C enqueues more tasks, DEF, then after task C is run,
+ * the set of tasks enqueued would be BADEF. And these 5 tasks would be reordered and
+ * randomized again to decide which tasks goes first. After that first task us ran,
+ * we randomize the whole set again and run and so on till there's no tasks left.
+ */
 public class ScheduledThreadPoolExecutorForTesting extends ScheduledThreadPoolExecutor {
     private static boolean go = true;
     private boolean shutdown = false;
     private int waiting = 0;
-    private static final AtomicLong sequencer = new AtomicLong(); // not sure if we need this cuz we don't need to compare runnables (?)
     private static final Map<Runnable, Runnable> childToParent = new HashMap<>();
     private static final List<PausableTask> enqueuedTasks = new ArrayList<>();
     private static PausableTask current;
@@ -100,7 +113,6 @@ public class ScheduledThreadPoolExecutorForTesting extends ScheduledThreadPoolEx
         return this.schedule(task, 1L, TimeUnit.NANOSECONDS);
     }
 
-
     protected <V> RunnableScheduledFuture<V> decorateTask(Runnable runnable, RunnableScheduledFuture<V> task) {
         return new PausableTask<V>(task, current);
     }
@@ -109,6 +121,9 @@ public class ScheduledThreadPoolExecutorForTesting extends ScheduledThreadPoolEx
         return new PausableTask<V>(task, current);
     }
 
+    /**
+     * Class that wrap around the enqueued tasks to make it capable of pausing and resuming
+     */
     private class PausableTask<V> implements RunnableScheduledFuture<V> {
         RunnableScheduledFuture<V> task;
         private boolean started;
@@ -119,11 +134,6 @@ public class ScheduledThreadPoolExecutorForTesting extends ScheduledThreadPoolEx
         PausableTask(RunnableScheduledFuture<V> task, PausableTask current) {
             this.current = current;
             this.task = task;
-        }
-
-        public void pause() throws InterruptedException {
-            waiting ++;
-            lock.await();
         }
 
         @Override
@@ -141,6 +151,10 @@ public class ScheduledThreadPoolExecutorForTesting extends ScheduledThreadPoolEx
             return task.compareTo(delayed);
         }
 
+        /**
+         * resume the task if it was paused
+         * or run it if it hasn't been run
+         */
         @Override
         public void run() {
             if (!lock.isReleased() && started) {
@@ -168,24 +182,17 @@ public class ScheduledThreadPoolExecutorForTesting extends ScheduledThreadPoolEx
 
         @Override
         public V get() throws ExecutionException, InterruptedException {
-            while (!ready) {}
-
-            if (current != null) {
-                waiting ++;
-                enqueuedTasks.remove(current);
-                childToParent.put(this, current);
-
-                if (enqueuedTasks.size() > 0) randomTask();
-                else go = true;
-
-                current.lock.await();
-            }
-
+            getHelper();
             return task.get();
         }
 
         @Override
         public V get(long l, TimeUnit timeUnit) throws ExecutionException, InterruptedException, TimeoutException {
+            getHelper();
+            return task.get(l, timeUnit);
+        }
+
+        private void getHelper() throws InterruptedException {
             while (!ready) {}
 
             if (current != null) {
@@ -198,7 +205,6 @@ public class ScheduledThreadPoolExecutorForTesting extends ScheduledThreadPoolEx
 
                 current.lock.await();
             }
-            return task.get(l, timeUnit);
         }
     }
 
@@ -211,7 +217,6 @@ public class ScheduledThreadPoolExecutorForTesting extends ScheduledThreadPoolEx
         PausableTask task = (PausableTask) r;
 
         synchronized (enqueuedTasks) { enqueuedTasks.add(task); }
-
         if (!go) {
             try {
                 waiting ++;
@@ -254,8 +259,7 @@ public class ScheduledThreadPoolExecutorForTesting extends ScheduledThreadPoolEx
      * @function
      *      let one thread run if there are threads waiting
      *      update current running thread (current field)
-     *      shutdown if we are done with the last thread avaiable
-     *
+     *      shutdown if we are done with the last thread available
      */
     private void randomTask() {
         Random ran = new Random(seed);
@@ -280,6 +284,9 @@ public class ScheduledThreadPoolExecutorForTesting extends ScheduledThreadPoolEx
         }
     }
 
+    /**
+     * shutdown the executor once all enqueued tasks are done running
+     */
     public void shutdown() {
         try {
             awaitTermination(5, TimeUnit.SECONDS);
